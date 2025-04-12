@@ -8,15 +8,19 @@ export interface MicrobeAnalysis {
   description: string;
 }
 
-const GEMINI_API_KEY = 'AIzaSyBvFwhiB2F9oA13a5v5pkYdszpcQItL73E';
+// Remove hardcoded API key and use the one from CONFIG
 
 export async function analyzeMicroscopeImage(base64Image: string): Promise<MicrobeAnalysis> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
+    if (!CONFIG.GEMINI_API_KEY) {
+      throw new Error('Gemini API key not configured. Please check your environment variables.');
+    }
+
     console.log('Calling Gemini API...');
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
