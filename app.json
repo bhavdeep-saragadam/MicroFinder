@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "scheme": "acme",
+    "plugins": [
+      "expo-router"
+    ],
+    "name": "microfinder",
+    "slug": "microfinder",
+    "newArchEnabled": true
+  }
+}
