@@ -76,39 +76,66 @@ export async function getDiscoveries(): Promise<Discovery[]> {
 }
 
 export async function getDiscoveryById(id: string): Promise<Discovery> {
-  // TODO: Replace with actual API call
-  return {
-    id,
-    user_id: 'Sample User',
-    microbe_name: 'Sample Microbe',
-    classification: 'bacteria',
-    image_url: 'https://placekitten.com/400/400', // Placeholder image
-    analysis_results: 'This is a sample analysis result for the microbe.',
-    characteristics: [
-      'Gram-positive',
-      'Spherical shape',
-      'Forms clusters',
-      'Non-motile'
-    ],
-    created_at: new Date().toISOString(),
-    confidence_score: 0.8,
-    gpt_analysis: {
-      microbeName: 'Sample Microbe',
-      classification: 'bacteria',
-      confidence: 0.8,
-      characteristics: ['Gram-positive', 'Spherical shape', 'Forms clusters', 'Non-motile'],
-      description: 'This is a sample analysis result for the microbe.'
-    }
-  };
+  const { data, error } = await supabase
+    .from('discoveries')
+    .select('*')
+    .eq('id', id)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching discovery:', error);
+    throw new Error('Failed to fetch discovery: ' + error.message);
+  }
+  
+  return data;
+}
+
+export async function updateDiscovery(
+  id: string,
+  updates: Partial<Omit<Discovery, 'id' | 'user_id' | 'created_at'>>
+): Promise<Discovery> {
+  // Get the current user's session to verify ownership
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error('User must be authenticated to update discoveries');
+  }
+  
+  // If classification is being updated, validate it
+  if (updates.classification) {
+    updates.classification = validateClassification(updates.classification);
+  }
+  
+  const { data, error } = await supabase
+    .from('discoveries')
+    .update(updates)
+    .eq('id', id)
+    .eq('user_id', session.user.id) // Ensures users can only update their own discoveries
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Error updating discovery:', error);
+    throw new Error('Failed to update discovery: ' + error.message);
+  }
+  
+  return data;
 }
 
 export async function deleteDiscovery(id: string): Promise<void> {
+  // Get the current user's session to verify ownership
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error('User must be authenticated to delete discoveries');
+  }
+  
   const { error } = await supabase
     .from('discoveries')
     .delete()
-    .eq('id', id);
-
+    .eq('id', id)
+    .eq('user_id', session.user.id); // Ensures users can only delete their own discoveries
+  
   if (error) {
-    throw error;
+    console.error('Error deleting discovery:', error);
+    throw new Error('Failed to delete discovery: ' + error.message);
   }
 } 

@@ -10,7 +10,7 @@ export default function AnalyzeIntroScreen() {
   const theme = useTheme();
 
   const handleOpenCamera = () => {
-    router.push('/(tabs)/camera/capture');
+    router.push('/camera/capture');
   };
 
   const features = [
