@@ -151,17 +151,6 @@ export default function AnalysisScreen() {
       <View style={styles.actions}>
         <Button
           mode="contained"
-          onPress={() => router.push({
-            pathname: '/(tabs)/library/flashcards/create',
-            params: { discoveryId: discovery.id }
-          })}
-          style={styles.button}
-        >
-          Create Flashcard
-        </Button>
-
-        <Button
-          mode="outlined"
           onPress={goBack}
           style={styles.button}
         >

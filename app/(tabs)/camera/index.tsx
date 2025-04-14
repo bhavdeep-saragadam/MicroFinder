@@ -5,6 +5,11 @@ import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+console.log('Database connection details:', {
+  url: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  key: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ? 'exists' : 'missing'
+});
+
 export default function AnalyzeIntroScreen() {
   const router = useRouter();
   const theme = useTheme();

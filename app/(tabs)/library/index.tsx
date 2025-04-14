@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, ImageBackground, FlatList } from 'react-native';
-import { Text, Card, Searchbar, Chip, useTheme, Button, ActivityIndicator, IconButton, Divider } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, RefreshControl, ImageBackground, FlatList, TouchableOpacity } from 'react-native';
+import { Text, Card, Searchbar, Chip, useTheme, Button, ActivityIndicator, IconButton, Divider, Menu, Portal, Dialog, Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getDiscoveries, type Discovery } from '../../../services/discoveries';
+import { getDiscoveries, deleteDiscovery, type Discovery } from '../../../services/discoveries';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Filter = 'all' | 'bacteria' | 'virus' | 'fungi' | 'protozoa';
@@ -17,6 +17,12 @@ export default function LibraryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<Filter>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [menuVisible, setMenuVisible] = useState<string | null>(null);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [selectedDiscovery, setSelectedDiscovery] = useState<Discovery | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   useEffect(() => {
     loadDiscoveries();
@@ -28,6 +34,7 @@ export default function LibraryScreen() {
       setDiscoveries(data);
     } catch (error) {
       console.error('Error loading discoveries:', error);
+      showMessage('Failed to load discoveries');
     } finally {
       setLoading(false);
     }
@@ -38,6 +45,40 @@ export default function LibraryScreen() {
     await loadDiscoveries();
     setRefreshing(false);
   }
+
+  const showMessage = (message: string) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
+  };
+
+  const handleEdit = (discovery: Discovery) => {
+    setMenuVisible(null);
+    router.push({
+      pathname: '/(tabs)/library/[id]',
+      params: { id: discovery.id, mode: 'edit' }
+    });
+  };
+
+  const handleDelete = async () => {
+    if (!selectedDiscovery) return;
+    try {
+      await deleteDiscovery(selectedDiscovery.id);
+      setSnackbarMessage('Discovery deleted successfully');
+      setSnackbarVisible(true);
+      loadDiscoveries(); // Refresh the list
+    } catch (error) {
+      setSnackbarMessage('Failed to delete discovery');
+      setSnackbarVisible(true);
+    }
+    setDeleteDialogVisible(false);
+    setSelectedDiscovery(null);
+  };
+
+  const showDeleteDialog = (discovery: Discovery) => {
+    setSelectedDiscovery(discovery);
+    setMenuVisible(null);
+    setDeleteDialogVisible(true);
+  };
 
   const toggleViewMode = () => {
     setViewMode(viewMode === 'grid' ? 'list' : 'grid');
@@ -54,21 +95,46 @@ export default function LibraryScreen() {
     );
 
   const renderGridItem = ({ item }: { item: Discovery }) => (
-    <Card
-      style={styles.gridCard}
-      onPress={() => router.push({
-        pathname: '/(tabs)/library/[id]',
-        params: { id: item.id }
-      })}
-    >
-      <Card.Cover 
-        source={{ uri: item.image_url }} 
-        style={styles.cardImage}
-      />
+    <Card style={styles.gridCard}>
+      <TouchableOpacity
+        onPress={() => router.push({
+          pathname: '/(tabs)/library/[id]',
+          params: { id: item.id }
+        })}
+      >
+        <Card.Cover 
+          source={{ uri: item.image_url }} 
+          style={styles.cardImage}
+        />
+      </TouchableOpacity>
       <Card.Content style={styles.cardContent}>
-        <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>
-          {item.microbe_name}
-        </Text>
+        <View style={styles.cardHeader}>
+          <Text variant="titleMedium" numberOfLines={1} style={styles.cardTitle}>
+            {item.microbe_name}
+          </Text>
+          <Menu
+            visible={menuVisible === item.id}
+            onDismiss={() => setMenuVisible(null)}
+            anchor={
+              <IconButton
+                icon="dots-vertical"
+                size={20}
+                onPress={() => setMenuVisible(item.id)}
+              />
+            }
+          >
+            <Menu.Item
+              onPress={() => handleEdit(item)}
+              title="Edit"
+              leadingIcon="pencil"
+            />
+            <Menu.Item
+              onPress={() => showDeleteDialog(item)}
+              title="Delete"
+              leadingIcon="delete"
+            />
+          </Menu>
+        </View>
         <View style={styles.cardDetails}>
           <Chip 
             style={styles.classificationChip} 
@@ -98,9 +164,33 @@ export default function LibraryScreen() {
         subtitle={item.classification}
         left={(props) => renderClassificationIcon(item.classification, 36)}
         right={(props) => (
-          <Text variant="bodySmall" style={styles.listDate}>
-            {new Date(item.created_at).toLocaleDateString()}
-          </Text>
+          <View style={styles.listItemRight}>
+            <Text variant="bodySmall" style={styles.listDate}>
+              {new Date(item.created_at).toLocaleDateString()}
+            </Text>
+            <Menu
+              visible={menuVisible === item.id}
+              onDismiss={() => setMenuVisible(null)}
+              anchor={
+                <IconButton
+                  icon="dots-vertical"
+                  size={20}
+                  onPress={() => setMenuVisible(item.id)}
+                />
+              }
+            >
+              <Menu.Item
+                onPress={() => handleEdit(item)}
+                title="Edit"
+                leadingIcon="pencil"
+              />
+              <Menu.Item
+                onPress={() => showDeleteDialog(item)}
+                title="Delete"
+                leadingIcon="delete"
+              />
+            </Menu>
+          </View>
         )}
       />
     </Card>
@@ -233,6 +323,33 @@ export default function LibraryScreen() {
 
       <Divider />
 
+      <Portal>
+        <Dialog visible={deleteDialogVisible} onDismiss={() => setDeleteDialogVisible(false)}>
+          <Dialog.Title>Delete Discovery</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodyMedium">
+              Are you sure you want to delete this discovery? This action cannot be undone.
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setDeleteDialogVisible(false)}>Cancel</Button>
+            <Button onPress={handleDelete} loading={isProcessing}>Delete</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        action={{
+          label: 'OK',
+          onPress: () => setSnackbarVisible(false),
+        }}
+      >
+        {snackbarMessage}
+      </Snackbar>
+
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -244,7 +361,7 @@ export default function LibraryScreen() {
           renderItem={viewMode === 'grid' ? renderGridItem : renderListItem}
           keyExtractor={(item) => item.id.toString()}
           numColumns={viewMode === 'grid' ? 2 : 1}
-          key={viewMode} // Force re-render when view mode changes
+          key={viewMode}
           contentContainerStyle={viewMode === 'grid' ? styles.gridContent : styles.listContent}
           ListEmptyComponent={renderEmptyState}
           refreshControl={
@@ -378,5 +495,15 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     borderRadius: 8,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  listItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 }); 

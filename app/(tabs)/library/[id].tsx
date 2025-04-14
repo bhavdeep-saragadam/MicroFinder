@@ -11,12 +11,12 @@ type Classification = 'bacteria' | 'virus' | 'fungi' | 'protozoa';
 interface DiscoveryDetailScreenProps {}
 
 const DiscoveryDetailScreen: React.FC<DiscoveryDetailScreenProps> = () => {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
   const router = useRouter();
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(mode === 'edit');
   const [editedName, setEditedName] = useState<string>('');
   const [editedClassification, setEditedClassification] = useState<Classification>('bacteria');
   const [editedDescription, setEditedDescription] = useState<string>('');
@@ -29,15 +29,22 @@ const DiscoveryDetailScreen: React.FC<DiscoveryDetailScreenProps> = () => {
     loadDiscovery();
   }, [id]);
 
+  useEffect(() => {
+    // Enter edit mode when mode parameter is 'edit'
+    if (mode === 'edit') {
+      setIsEditing(true);
+    }
+  }, [mode]);
+
   async function loadDiscovery() {
     setLoading(true);
     try {
       const data = await getDiscoveryById(id);
       setDiscovery(data);
       // Initialize edit form values
-      setEditedName(data.microbe_name);
+      setEditedName(data.microbe_name || '');
       setEditedClassification(data.classification);
-      setEditedDescription(data.analysis_results);
+      setEditedDescription(data.analysis_results || '');
     } catch (err) {
       setError('Failed to load discovery');
       console.error(err);
@@ -131,15 +138,10 @@ const DiscoveryDetailScreen: React.FC<DiscoveryDetailScreenProps> = () => {
                     onPress={() => {
                       setIsEditing(false);
                       // Reset form values
-                      setEditedName(discovery.microbe_name);
+                      setEditedName(discovery.microbe_name || '');
                       setEditedClassification(discovery.classification);
-                      setEditedDescription(discovery.analysis_results);
+                      setEditedDescription(discovery.analysis_results || '');
                     }} 
-                  />
-                  <IconButton 
-                    icon="check" 
-                    onPress={handleSaveChanges}
-                    disabled={isProcessing} 
                   />
                 </>
               ) : (
@@ -159,110 +161,127 @@ const DiscoveryDetailScreen: React.FC<DiscoveryDetailScreenProps> = () => {
         }}
       />
       
-      <ScrollView style={styles.scrollView}>
-        <Card style={styles.imageCard}>
-          <Card.Cover source={{ uri: discovery.image_url }} />
-        </Card>
+      <View style={styles.contentContainer}>
+        <ScrollView style={styles.scrollView}>
+          <Card style={styles.imageCard}>
+            <Card.Cover source={{ uri: discovery.image_url }} />
+          </Card>
 
-        {isEditing ? (
-          // Edit mode
-          <>
-            <Card style={styles.card}>
-              <Card.Title title="Basic Information" />
-              <Card.Content>
-                <TextInput
-                  label="Microbe Name"
-                  value={editedName}
-                  onChangeText={setEditedName}
-                  mode="outlined"
-                  style={styles.input}
-                />
-                
-                <Text variant="titleMedium" style={styles.label}>Classification</Text>
-                <View style={styles.chipContainer}>
-                  {classificationOptions.map(option => (
-                    <Chip
-                      key={option.value}
-                      selected={editedClassification === option.value}
-                      onPress={() => setEditedClassification(option.value as Classification)}
-                      style={styles.chip}
-                      mode={editedClassification === option.value ? "flat" : "outlined"}
-                    >
-                      {option.label}
-                    </Chip>
-                  ))}
-                </View>
-                
-                <TextInput
-                  label="Description"
-                  value={editedDescription}
-                  onChangeText={setEditedDescription}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={5}
-                  style={[styles.input, styles.textArea]}
-                />
-              </Card.Content>
-            </Card>
-          </>
-        ) : (
-          // View mode
-          <>
-            <Card style={styles.infoCard}>
-              <Card.Content>
-                <View style={styles.infoRow}>
-                  <MaterialCommunityIcons 
-                    name={
-                      discovery.classification === 'bacteria' ? 'bacteria' :
-                      discovery.classification === 'virus' ? 'virus' :
-                      discovery.classification === 'fungi' ? 'mushroom' : 'bug'
-                    } 
-                    size={24} 
-                    color="#666" 
+          {isEditing ? (
+            // Edit mode
+            <>
+              <Card style={styles.card}>
+                <Card.Title title="Basic Information" />
+                <Card.Content>
+                  <TextInput
+                    label="Microbe Name"
+                    value={editedName}
+                    onChangeText={setEditedName}
+                    mode="outlined"
+                    style={styles.input}
                   />
-                  <Text variant="titleMedium" style={styles.infoText}>
-                    {discovery.classification}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <MaterialCommunityIcons name="calendar" size={24} color="#666" />
-                  <Text variant="titleMedium" style={styles.infoText}>
-                    {new Date(discovery.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <MaterialCommunityIcons name="percent" size={24} color="#666" />
-                  <Text variant="titleMedium" style={styles.infoText}>
-                    {Math.round(discovery.confidence_score * 100)}% confidence
-                  </Text>
-                </View>
-              </Card.Content>
-            </Card>
-
-            <Card style={styles.card}>
-              <Card.Title title="Analysis Results" />
-              <Card.Content>
-                <Text variant="bodyLarge">{discovery.analysis_results}</Text>
-              </Card.Content>
-            </Card>
-
-            <Card style={styles.card}>
-              <Card.Title title="Key Characteristics" />
-              <Card.Content>
-                <List.Section>
-                  {discovery.characteristics.map((characteristic: string, index: number) => (
-                    <List.Item
-                      key={index}
-                      title={characteristic}
-                      left={() => <List.Icon icon="circle-small" />}
+                  
+                  <Text variant="titleMedium" style={styles.label}>Classification</Text>
+                  <View style={styles.chipContainer}>
+                    {classificationOptions.map(option => (
+                      <Chip
+                        key={option.value}
+                        selected={editedClassification === option.value}
+                        onPress={() => setEditedClassification(option.value as Classification)}
+                        style={styles.chip}
+                        mode={editedClassification === option.value ? "flat" : "outlined"}
+                      >
+                        {option.label}
+                      </Chip>
+                    ))}
+                  </View>
+                  
+                  <TextInput
+                    label="Description"
+                    value={editedDescription}
+                    onChangeText={setEditedDescription}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={5}
+                    style={[styles.input, styles.textArea]}
+                  />
+                </Card.Content>
+              </Card>
+            </>
+          ) : (
+            // View mode
+            <>
+              <Card style={styles.infoCard}>
+                <Card.Content>
+                  <View style={styles.infoRow}>
+                    <MaterialCommunityIcons 
+                      name={
+                        discovery.classification === 'bacteria' ? 'bacteria' :
+                        discovery.classification === 'virus' ? 'virus' :
+                        discovery.classification === 'fungi' ? 'mushroom' : 'bug'
+                      } 
+                      size={24} 
+                      color="#666" 
                     />
-                  ))}
-                </List.Section>
-              </Card.Content>
-            </Card>
-          </>
+                    <Text variant="titleMedium" style={styles.infoText}>
+                      {discovery.classification}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <MaterialCommunityIcons name="calendar" size={24} color="#666" />
+                    <Text variant="titleMedium" style={styles.infoText}>
+                      {new Date(discovery.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <MaterialCommunityIcons name="percent" size={24} color="#666" />
+                    <Text variant="titleMedium" style={styles.infoText}>
+                      {Math.round(discovery.confidence_score * 100)}% confidence
+                    </Text>
+                  </View>
+                </Card.Content>
+              </Card>
+
+              <Card style={styles.card}>
+                <Card.Title title="Analysis Results" />
+                <Card.Content>
+                  <Text variant="bodyLarge">{discovery.analysis_results}</Text>
+                </Card.Content>
+              </Card>
+
+              <Card style={styles.card}>
+                <Card.Title title="Key Characteristics" />
+                <Card.Content>
+                  <List.Section>
+                    {discovery.characteristics.map((characteristic: string, index: number) => (
+                      <List.Item
+                        key={index}
+                        title={characteristic}
+                        left={() => <List.Icon icon="circle-small" />}
+                      />
+                    ))}
+                  </List.Section>
+                </Card.Content>
+              </Card>
+            </>
+          )}
+        </ScrollView>
+
+        {isEditing && (
+          <View style={styles.bottomBar}>
+            <Button
+              mode="contained"
+              onPress={handleSaveChanges}
+              loading={isProcessing}
+              disabled={isProcessing}
+              style={styles.saveButton}
+              contentStyle={styles.saveButtonContent}
+            >
+              Save Changes
+            </Button>
+          </View>
         )}
-      </ScrollView>
+      </View>
 
       {/* Delete Confirmation Dialog */}
       <Portal>
@@ -351,6 +370,38 @@ const styles = StyleSheet.create({
   chip: {
     marginRight: 8,
     marginBottom: 8,
+  },
+  buttonContainer: {
+    marginTop: 24,
+    gap: 12,
+  },
+  saveButton: {
+    borderRadius: 8,
+  },
+  cancelButton: {
+    borderRadius: 8,
+  },
+  contentContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'white',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  saveButtonContent: {
+    height: 48,
   },
 });
 

@@ -55,6 +55,7 @@ export default function ProfileScreen() {
           // No profile found, create one
           const newProfile = {
             id: user.id,
+            email: user.email || '',
             username: user.email?.split('@')[0] || 'user',
             full_name: user.user_metadata?.full_name || 'New User',
           };

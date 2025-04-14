@@ -9,11 +9,12 @@ export interface Discovery {
   microbe_name: string;
   classification: Classification;
   image_url: string;
-  analysis_results: string;
   characteristics: string[];
   created_at: string;
+  updated_at?: string;
   confidence_score: number;
   gpt_analysis: MicrobeAnalysis;
+  analysis_results?: string;
 }
 
 function validateClassification(classification: string): Classification {
@@ -39,27 +40,44 @@ export async function saveDiscovery(
 
   const validClassification = validateClassification(analysis.classification);
 
-  const { data, error } = await supabase
-    .from('discoveries')
-    .insert({
-      user_id: session.user.id,
-      image_url: imageUrl,
-      microbe_name: analysis.microbeName,
-      classification: validClassification,
-      confidence_score: analysis.confidence,
-      characteristics: analysis.characteristics,
-      analysis_results: analysis.description,
-      gpt_analysis: analysis
-    })
-    .select()
-    .single();
+  const discoveryData: any = {
+    user_id: session.user.id,
+    image_url: imageUrl,
+    microbe_name: analysis.microbeName,
+    classification: validClassification,
+    confidence_score: analysis.confidence || 0,
+    gpt_analysis: analysis
+  };
 
-  if (error) {
-    console.error('Error saving discovery:', error);
-    throw new Error('Failed to save discovery: ' + error.message);
+  // Handle characteristics properly as a string array
+  if (Array.isArray(analysis.characteristics)) {
+    discoveryData.characteristics = analysis.characteristics;
+  } else {
+    discoveryData.characteristics = [];
   }
 
-  return data;
+  // Add analysis_results 
+  if (typeof analysis.description === 'string') {
+    discoveryData.analysis_results = analysis.description;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('discoveries')
+      .insert(discoveryData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error saving discovery:', error);
+      throw new Error('Failed to save discovery: ' + error.message);
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error in saveDiscovery:', err);
+    throw new Error(`Failed to save discovery: ${err}`);
+  }
 }
 
 export async function getDiscoveries(): Promise<Discovery[]> {
@@ -90,35 +108,46 @@ export async function getDiscoveryById(id: string): Promise<Discovery> {
   return data;
 }
 
-export async function updateDiscovery(
-  id: string,
-  updates: Partial<Omit<Discovery, 'id' | 'user_id' | 'created_at'>>
-): Promise<Discovery> {
+export async function updateDiscovery(id: string, data: Partial<Discovery>): Promise<Discovery> {
   // Get the current user's session to verify ownership
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session) {
     throw new Error('User must be authenticated to update discoveries');
   }
-  
+
   // If classification is being updated, validate it
-  if (updates.classification) {
-    updates.classification = validateClassification(updates.classification);
+  if (data.classification) {
+    data.classification = validateClassification(data.classification);
   }
+
+  // Only update fields that definitely exist in the database
+  const updateFields: any = {};
+  if (data.microbe_name !== undefined) updateFields.microbe_name = data.microbe_name;
+  if (data.classification !== undefined) updateFields.classification = data.classification;
   
-  const { data, error } = await supabase
+  // Only try to update analysis_results if it's provided
+  if (data.analysis_results !== undefined) {
+    try {
+      updateFields.analysis_results = data.analysis_results;
+    } catch (e) {
+      console.warn('Could not update analysis_results, column may not exist:', e);
+    }
+  }
+
+  const { data: updatedDiscovery, error } = await supabase
     .from('discoveries')
-    .update(updates)
+    .update(updateFields)
     .eq('id', id)
-    .eq('user_id', session.user.id) // Ensures users can only update their own discoveries
+    .eq('user_id', session.user.id)
     .select()
     .single();
-  
+
   if (error) {
     console.error('Error updating discovery:', error);
-    throw new Error('Failed to update discovery: ' + error.message);
+    throw new Error(`Failed to update discovery: ${error.message}`);
   }
-  
-  return data;
+
+  return updatedDiscovery;
 }
 
 export async function deleteDiscovery(id: string): Promise<void> {
