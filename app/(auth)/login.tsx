@@ -1,34 +1,74 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { TextInput, Button, Text } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import { TextInput, Button, Text, Divider } from 'react-native-paper';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSession } from '../../context/SessionContext';
+import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn, signInWithOAuth, loading: sessionLoading } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  // Get app scheme from the config
+  const appScheme = (Constants.expoConfig?.scheme as string) || 'acme';
+  const redirectUrl = `${appScheme}://login`;
 
   async function handleLogin() {
     try {
-      setLoading(true);
       setError(null);
       
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await signIn(email, password);
 
       if (error) throw error;
       
       router.replace('/(tabs)');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An error occurred');
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    try {
+      setError(null);
+      setOauthLoading(true);
+      
+      console.log('Starting Google sign-in with redirect URL:', redirectUrl);
+      
+      // Use the new SessionContext method
+      const { error } = await signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+        }
+      });
+
+      if (error) {
+        console.error('OAuth error:', error);
+        throw error;
+      }
+      
+      console.log('OAuth process initiated successfully');
+      // No need to navigate here as the auth state listener will handle this
+    } catch (e) {
+      console.error('Google sign-in error:', e);
+      setError(e instanceof Error ? e.message : 'An error occurred with Google sign in');
+      
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Authentication Error',
+          'There was a problem signing in with Google. Please try again or use email login.',
+          [{ text: 'OK' }]
+        );
+      }
     } finally {
-      setLoading(false);
+      setOauthLoading(false);
     }
   }
 
@@ -64,12 +104,29 @@ export default function LoginScreen() {
         <Button
           mode="contained"
           onPress={handleLogin}
-          loading={loading}
-          disabled={loading}
+          loading={sessionLoading}
+          disabled={sessionLoading}
           style={styles.button}
         >
           Log In
         </Button>
+
+        <View style={styles.dividerContainer}>
+          <Divider style={styles.divider} />
+          <Text style={styles.orText}>OR</Text>
+          <Divider style={styles.divider} />
+        </View>
+
+        <TouchableOpacity 
+          style={styles.googleButton}
+          onPress={handleGoogleSignIn}
+          disabled={sessionLoading || oauthLoading}
+        >
+          <MaterialCommunityIcons name="google" size={24} color="#4285F4" style={styles.googleIcon} />
+          <Text style={styles.googleButtonText}>
+            {oauthLoading ? 'Connecting to Google...' : 'Continue with Google'}
+          </Text>
+        </TouchableOpacity>
 
         <Button
           mode="text"
@@ -85,6 +142,14 @@ export default function LoginScreen() {
           style={styles.link}
         >
           Forgot Password?
+        </Button>
+
+        <Button
+          mode="text"
+          onPress={() => router.push('reset-password-manual')}
+          style={styles.link}
+        >
+          Manual Password Reset
         </Button>
       </View>
     </SafeAreaView>
@@ -130,5 +195,37 @@ const styles = StyleSheet.create({
   },
   link: {
     marginTop: 16,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  orText: {
+    marginHorizontal: 10,
+    color: '#666',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  googleIcon: {
+    marginRight: 12,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    color: '#444',
+    fontWeight: '500',
   },
 }); 
